@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  # Base de données MySQL
+  mysql:
+    image: mysql:8.0
+    container_name: ghs_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: Root@MySQLAdmin12
+      MYSQL_DATABASE: ghs
+      MYSQL_USER: ghs_user
+      MYSQL_PASSWORD: ghs_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./ghs.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - ghs_network
+
+  # API FastAPI
+  api:
+    build: ./backend
+    container_name: ghs_api
+    environment:
+      DB_USER: root
+      DB_PASSWORD: Root@MySQLAdmin12
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ghs
+      SECRET_KEY: your-super-secret-key-for-docker
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mysql
+    volumes:
+      - ./backend:/app
+    networks:
+      - ghs_network
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+
+networks:
+  ghs_network:
+    driver: bridge
