@@ -1,18 +1,20 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from 'react-query';
+import { AuthProvider, useAuth } from './hooks/useAuth';
 import { Toaster } from 'react-hot-toast';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import Layout from './components/layout/Layout';
+
+// Pages
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import MyRequests from './pages/MyRequests';
+import NewRequest from './pages/NewRequest';
 import Employees from './pages/Employees';
 import Services from './pages/Services';
-import Requests from './pages/Requests';
-import Validation from './pages/Validation';
-import Reports from './pages/Reports';
-import Accounts from './pages/Accounts';
-import './App.css';
+
+// Components
+import Layout from './components/Layout';
+import LoadingSpinner from './components/LoadingSpinner';
 
 // Configuration React Query
 const queryClient = new QueryClient({
@@ -25,107 +27,90 @@ const queryClient = new QueryClient({
 });
 
 // Composant pour protéger les routes
-const ProtectedRoute = ({ children, requiredPermissions }) => {
-  const { isAuthenticated, hasPermission, loading } = useAuth();
+const ProtectedRoute = ({ children }) => {
+  const { isAuthenticated, loading } = useAuth();
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
+  return isAuthenticated ? children : <Navigate to="/login" replace />;
+};
 
-  if (requiredPermissions && !hasPermission(requiredPermissions)) {
+// Composant principal de l'application
+function AppContent() {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Accès refusé</h2>
-          <p className="text-gray-600">Vous n'avez pas les permissions nécessaires.</p>
-        </div>
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
 
-  return children;
-};
+  return (
+    <Router>
+      <Routes>
+        <Route 
+          path="/login" 
+          element={isAuthenticated ? <Navigate to="/" replace /> : <Login />} 
+        />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Dashboard />} />
+          <Route path="my-requests" element={<MyRequests />} />
+          <Route path="new-request" element={<NewRequest />} />
+          <Route path="employees" element={<Employees />} />
+          <Route path="services" element={<Services />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Router>
+  );
+}
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Router>
-          <div className="App">
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route
-                path="/*"
-                element={
-                  <ProtectedRoute>
-                    <Layout />
-                  </ProtectedRoute>
-                }
-              >
-                <Route index element={<Dashboard />} />
-                <Route path="requests" element={<Requests />} />
-                <Route 
-                  path="employees" 
-                  element={
-                    <ProtectedRoute requiredPermissions={['Administrator', 'Supervisor']}>
-                      <Employees />
-                    </ProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="services" 
-                  element={
-                    <ProtectedRoute requiredPermissions={['Administrator', 'Supervisor']}>
-                      <Services />
-                    </ProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="validation" 
-                  element={
-                    <ProtectedRoute requiredPermissions={['Administrator', 'Supervisor', 'Coordinator']}>
-                      <Validation />
-                    </ProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="reports" 
-                  element={
-                    <ProtectedRoute requiredPermissions={['Administrator', 'Supervisor']}>
-                      <Reports />
-                    </ProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="accounts" 
-                  element={
-                    <ProtectedRoute requiredPermissions={['Administrator']}>
-                      <Accounts />
-                    </ProtectedRoute>
-                  } 
-                />
-              </Route>
-            </Routes>
-            <Toaster 
-              position="top-right"
-              toastOptions={{
-                duration: 4000,
-                style: {
-                  background: '#363636',
-                  color: '#fff',
+        <div className="App">
+          <AppContent />
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#363636',
+                color: '#fff',
+              },
+              success: {
+                duration: 3000,
+                iconTheme: {
+                  primary: '#4ade80',
+                  secondary: '#fff',
                 },
-              }}
-            />
-          </div>
-        </Router>
+              },
+              error: {
+                duration: 4000,
+                iconTheme: {
+                  primary: '#ef4444',
+                  secondary: '#fff',
+                },
+              },
+            }}
+          />
+        </div>
       </AuthProvider>
     </QueryClientProvider>
   );

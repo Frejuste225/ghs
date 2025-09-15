@@ -1,83 +1,100 @@
-import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { serviceService, employeeService } from '../services/ghs';
+import React, { useState, useEffect } from 'react';
+import { useServices, useCreateService, useUpdateService, useDeleteService } from '../hooks/useServices';
+import Table from '../components/Table';
+import Button from '../components/Button';
+import Modal from '../components/Modal';
+import FormField from '../components/FormField';
 import { useForm } from 'react-hook-form';
+import { PlusIcon, PencilIcon, TrashIcon, BuildingOfficeIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
-import Card from '../components/ui/Card';
-import Button from '../components/ui/Button';
-import Modal from '../components/ui/Modal';
-import { 
-  Plus, 
-  Building2, 
-  Users, 
-  Edit,
-  Trash2,
-  Search
-} from 'lucide-react';
 
 const Services = () => {
-  const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingService, setEditingService] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  
+  const { data: services, isLoading } = useServices();
+  const createServiceMutation = useCreateService();
+  const updateServiceMutation = useUpdateService();
+  const deleteServiceMutation = useDeleteService();
+  
+  const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm();
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm();
-
-  // Récupérer les services et employés
-  const { data: services = [], isLoading } = useQuery('services', serviceService.getAll);
-  const { data: employees = [] } = useQuery('employees', employeeService.getAll);
-
-  // Filtrer les services selon la recherche
-  const filteredServices = services.filter(service =>
-    service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    service.description?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  // Mutations
-  const createMutation = useMutation(serviceService.create, {
-    onSuccess: () => {
-      queryClient.invalidateQueries('services');
-      toast.success('Service créé avec succès');
-      setIsModalOpen(false);
-      reset();
-    },
-    onError: () => {
-      toast.error('Erreur lors de la création');
-    },
-  });
-
-  const updateMutation = useMutation(
-    ({ id, data }) => serviceService.update(id, data),
+  const columns = [
     {
-      onSuccess: () => {
-        queryClient.invalidateQueries('services');
-        toast.success('Service modifié avec succès');
-        setIsModalOpen(false);
-        setEditingService(null);
-        reset();
-      },
-      onError: () => {
-        toast.error('Erreur lors de la modification');
-      },
-    }
-  );
-
-  const deleteMutation = useMutation(serviceService.delete, {
-    onSuccess: () => {
-      queryClient.invalidateQueries('services');
-      toast.success('Service supprimé avec succès');
+      header: 'Code',
+      accessor: 'serviceCode',
     },
-    onError: () => {
-      toast.error('Erreur lors de la suppression');
+    {
+      header: 'Nom du service',
+      accessor: 'serviceName',
     },
-  });
+    {
+      header: 'Service parent',
+      cell: (row) => {
+        if (!row.parentServiceID) return '-';
+        const parentService = services?.find(s => s.serviceID === row.parentServiceID);
+        return parentService ? parentService.serviceName : 'Service inconnu';
+      },
+    },
+    {
+      header: 'Manager',
+      cell: (row) => row.manager || '-',
+    },
+    {
+      header: 'Description',
+      cell: (row) => row.description ? (
+        <span className="text-gray-600 truncate max-w-xs block" title={row.description}>
+          {row.description}
+        </span>
+      ) : (
+        <span className="text-gray-400">-</span>
+      ),
+    },
+    {
+      header: 'Actions',
+      cell: (row) => (
+        <div className="flex space-x-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleEdit(row)}
+          >
+            <PencilIcon className="h-4 w-4" />
+          </Button>
+          <Button
+            size="sm"
+            variant="danger"
+            onClick={() => handleDelete(row.serviceID)}
+          >
+            <TrashIcon className="h-4 w-4" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
-  const onSubmit = (data) => {
+  // Préparer les options de services parents
+  const parentServiceOptions = services?.map(service => ({
+    value: service.serviceID,
+    label: service.serviceName
+  })) || [];
+
+  // Effet pour remplir le formulaire lors de l'édition
+  useEffect(() => {
     if (editingService) {
-      updateMutation.mutate({ id: editingService.id, data });
+      setValue('serviceCode', editingService.serviceCode);
+      setValue('serviceName', editingService.serviceName);
+      setValue('parentServiceID', editingService.parentServiceID || '');
+      setValue('manager', editingService.manager || '');
+      setValue('description', editingService.description || '');
     } else {
-      createMutation.mutate(data);
+      reset();
     }
+  }, [editingService, setValue, reset]);
+
+  const handleOpenModal = () => {
+    setEditingService(null);
+    setIsModalOpen(true);
   };
 
   const handleEdit = (service) => {
@@ -85,198 +102,139 @@ const Services = () => {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id) => {
-    const employeesInService = employees.filter(emp => emp.service_id === id);
-    if (employeesInService.length > 0) {
-      toast.error('Impossible de supprimer un service qui contient des employés');
-      return;
-    }
-    
+  const handleDelete = async (id) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce service ?')) {
-      deleteMutation.mutate(id);
+      try {
+        await deleteServiceMutation.mutateAsync(id);
+      } catch (error) {
+        console.error('Erreur lors de la suppression:', error);
+      }
     }
   };
 
-  const getEmployeeCount = (serviceId) => {
-    return employees.filter(emp => emp.service_id === serviceId).length;
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingService(null);
+    reset();
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-48 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const onSubmit = async (data) => {
+    try {
+      // Convertir parentServiceID en nombre ou null
+      const serviceData = {
+        ...data,
+        parentServiceID: data.parentServiceID ? parseInt(data.parentServiceID) : null
+      };
+
+      if (editingService) {
+        await updateServiceMutation.mutateAsync({
+          id: editingService.serviceID,
+          data: serviceData
+        });
+      } else {
+        await createServiceMutation.mutateAsync(serviceData);
+      }
+      handleCloseModal();
+    } catch (error) {
+      console.error('Erreur lors de la soumission:', error);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      {/* En-tête */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Services</h1>
-          <p className="text-gray-600">
-            Gérez les services de votre organisation
+          <p className="mt-1 text-sm text-gray-500">
+            Gérez les services et départements de votre organisation
           </p>
         </div>
-        <Button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center space-x-2"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Nouveau service</span>
+        <Button onClick={handleOpenModal}>
+          <PlusIcon className="h-5 w-5 mr-2" />
+          Nouveau service
         </Button>
       </div>
 
-      {/* Barre de recherche */}
-      <Card className="p-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <input
-            type="text"
-            placeholder="Rechercher un service..."
-            className="input pl-10"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      <div className="bg-white shadow rounded-lg">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <div className="flex items-center">
+            <BuildingOfficeIcon className="h-5 w-5 text-gray-400 mr-2" />
+            <h2 className="text-lg font-medium text-gray-900">Liste des services</h2>
+          </div>
         </div>
-      </Card>
-
-      {/* Liste des services */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredServices.map((service) => (
-          <Card key={service.id} className="hover:shadow-lg transition-shadow">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center">
-                  <Building2 className="w-6 h-6 text-primary-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">
-                    {service.name}
-                  </h3>
-                  <p className="text-sm text-gray-600">
-                    {getEmployeeCount(service.id)} employé(s)
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleEdit(service)}
-                >
-                  <Edit className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDelete(service.id)}
-                  className="text-danger-600 hover:text-danger-700"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-
-            {service.description && (
-              <p className="text-sm text-gray-600 mb-4">
-                {service.description}
-              </p>
-            )}
-
-            <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-              <div className="flex items-center text-sm text-gray-500">
-                <Users className="w-4 h-4 mr-1" />
-                {getEmployeeCount(service.id)} employé(s)
-              </div>
-              <span className="text-xs text-gray-400">
-                ID: {service.id}
-              </span>
-            </div>
-          </Card>
-        ))}
+        <Table
+          columns={columns}
+          data={services || []}
+          loading={isLoading}
+          emptyMessage="Aucun service trouvé"
+        />
       </div>
 
-      {filteredServices.length === 0 && (
-        <Card className="text-center py-12">
-          <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {searchTerm ? 'Aucun service trouvé' : 'Aucun service'}
-          </h3>
-          <p className="text-gray-600 mb-4">
-            {searchTerm 
-              ? 'Essayez de modifier votre recherche.'
-              : 'Commencez par ajouter votre premier service.'
-            }
-          </p>
-          {!searchTerm && (
-            <Button onClick={() => setIsModalOpen(true)}>
-              Ajouter un service
-            </Button>
-          )}
-        </Card>
-      )}
-
-      {/* Modal de création/édition */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setEditingService(null);
-          reset();
-        }}
+        onClose={handleCloseModal}
         title={editingService ? 'Modifier le service' : 'Nouveau service'}
+        size="lg"
       >
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div>
-            <label className="label">Nom du service</label>
-            <input
-              {...register('name', { required: 'Le nom est requis' })}
-              type="text"
-              className="input"
-              placeholder="Ex: Ressources Humaines"
-              defaultValue={editingService?.name}
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              label="Code du service"
+              name="serviceCode"
+              register={register}
+              error={errors.serviceCode}
+              required
+              placeholder="Ex: IT, HR, FIN"
             />
-            {errors.name && (
-              <p className="mt-1 text-sm text-danger-600">{errors.name.message}</p>
-            )}
+
+            <FormField
+              label="Nom du service"
+              name="serviceName"
+              register={register}
+              error={errors.serviceName}
+              required
+              placeholder="Ex: Informatique"
+            />
           </div>
 
-          <div>
-            <label className="label">Description</label>
-            <textarea
-              {...register('description')}
-              className="input"
-              rows="3"
-              placeholder="Description du service (optionnel)"
-              defaultValue={editingService?.description}
-            />
-          </div>
+          <FormField
+            label="Service parent"
+            name="parentServiceID"
+            type="select"
+            register={register}
+            error={errors.parentServiceID}
+            options={parentServiceOptions}
+            placeholder="Sélectionner un service parent (optionnel)"
+          />
+
+          <FormField
+            label="Manager"
+            name="manager"
+            register={register}
+            error={errors.manager}
+            placeholder="Nom du responsable"
+          />
+
+          <FormField
+            label="Description"
+            name="description"
+            type="textarea"
+            register={register}
+            error={errors.description}
+            placeholder="Description du service..."
+          />
 
           <div className="flex justify-end space-x-3 pt-4">
             <Button
               type="button"
-              variant="secondary"
-              onClick={() => {
-                setIsModalOpen(false);
-                setEditingService(null);
-                reset();
-              }}
+              variant="outline"
+              onClick={handleCloseModal}
             >
               Annuler
             </Button>
             <Button
               type="submit"
-              loading={createMutation.isLoading || updateMutation.isLoading}
-              disabled={createMutation.isLoading || updateMutation.isLoading}
+              loading={createServiceMutation.isLoading || updateServiceMutation.isLoading}
             >
               {editingService ? 'Modifier' : 'Créer'}
             </Button>

@@ -1,182 +1,225 @@
 import React from 'react';
-import { useQuery } from 'react-query';
-import { useAuth } from '../contexts/AuthContext';
-import { requestService } from '../services/ghs';
-import Card from '../components/ui/Card';
-import { 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
-  AlertCircle,
-  Users,
-  Calendar,
-  TrendingUp
-} from 'lucide-react';
+import { useMyRequests, usePendingRequests } from '../hooks/useRequests';
+import { useEmployees } from '../hooks/useEmployees';
+import { useServices } from '../hooks/useServices';
+import StatusBadge from '../components/StatusBadge';
+import LoadingSpinner from '../components/LoadingSpinner';
+import {
+  ClockIcon,
+  UserGroupIcon,
+  DocumentTextIcon,
+  CheckCircleIcon,
+  BuildingOfficeIcon,
+  ExclamationTriangleIcon,
+} from '@heroicons/react/24/outline';
 
 const Dashboard = () => {
-  const { user } = useAuth();
+  const { data: myRequests, isLoading: loadingMyRequests } = useMyRequests();
+  const { data: pendingRequests, isLoading: loadingPending } = usePendingRequests();
+  const { data: employees, isLoading: loadingEmployees } = useEmployees();
+  const { data: services, isLoading: loadingServices } = useServices();
 
-  // Récupérer les statistiques des demandes
-  const { data: requests = [], isLoading } = useQuery(
-    'dashboard-requests',
-    requestService.getAll,
+  const stats = [
     {
-      refetchInterval: 30000, // Actualiser toutes les 30 secondes
-    }
-  );
+      name: 'Mes demandes',
+      value: myRequests?.length || 0,
+      icon: ClockIcon,
+      color: 'bg-blue-500',
+      loading: loadingMyRequests,
+    },
+    {
+      name: 'Demandes en attente',
+      value: pendingRequests?.length || 0,
+      icon: ExclamationTriangleIcon,
+      color: 'bg-yellow-500',
+      loading: loadingPending,
+    },
+    {
+      name: 'Employés',
+      value: employees?.length || 0,
+      icon: UserGroupIcon,
+      color: 'bg-green-500',
+      loading: loadingEmployees,
+    },
+    {
+      name: 'Services',
+      value: services?.length || 0,
+      icon: BuildingOfficeIcon,
+      color: 'bg-purple-500',
+      loading: loadingServices,
+    },
+  ];
 
-  // Calculer les statistiques
-  const stats = {
-    total: requests.length,
-    pending: requests.filter(r => r.status === 'Pending').length,
-    approved: requests.filter(r => r.status === 'Approved').length,
-    rejected: requests.filter(r => r.status === 'Rejected').length,
-    myRequests: requests.filter(r => r.employee_id === user?.id).length,
-  };
-
-  const StatCard = ({ title, value, icon: Icon, color = 'primary', trend }) => (
-    <Card className="p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-600">{title}</p>
-          <p className={`text-2xl font-bold text-${color}-600`}>{value}</p>
-          {trend && (
-            <p className="text-xs text-gray-500 mt-1">
-              <TrendingUp className="w-3 h-3 inline mr-1" />
-              {trend}
-            </p>
-          )}
-        </div>
-        <div className={`p-3 bg-${color}-100 rounded-full`}>
-          <Icon className={`w-6 h-6 text-${color}-600`} />
-        </div>
-      </div>
-    </Card>
-  );
-
-  const RecentRequest = ({ request }) => (
-    <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-      <div className="flex items-center space-x-3">
-        <div className={`p-2 rounded-full ${
-          request.status === 'Approved' ? 'bg-success-100' :
-          request.status === 'Rejected' ? 'bg-danger-100' :
-          'bg-warning-100'
-        }`}>
-          {request.status === 'Approved' ? (
-            <CheckCircle className="w-4 h-4 text-success-600" />
-          ) : request.status === 'Rejected' ? (
-            <XCircle className="w-4 h-4 text-danger-600" />
-          ) : (
-            <AlertCircle className="w-4 h-4 text-warning-600" />
-          )}
-        </div>
-        <div>
-          <p className="font-medium text-gray-900">
-            {request.hours}h - {request.date}
-          </p>
-          <p className="text-sm text-gray-600">{request.reason}</p>
-        </div>
-      </div>
-      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-        request.status === 'Approved' ? 'bg-success-100 text-success-800' :
-        request.status === 'Rejected' ? 'bg-danger-100 text-danger-800' :
-        'bg-warning-100 text-warning-800'
-      }`}>
-        {request.status === 'Pending' ? 'En attente' :
-         request.status === 'Approved' ? 'Approuvée' : 'Rejetée'}
-      </span>
-    </div>
-  );
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-white p-6 rounded-lg shadow animate-pulse">
-              <div className="h-4 bg-gray-200 rounded mb-2"></div>
-              <div className="h-8 bg-gray-200 rounded"></div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const recentRequests = myRequests?.slice(0, 5) || [];
+  const urgentRequests = pendingRequests?.slice(0, 3) || [];
 
   return (
     <div className="space-y-6">
-      {/* En-tête */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          Bonjour, {user?.username} 👋
-        </h1>
-        <p className="text-gray-600">
-          Voici un aperçu de vos heures supplémentaires
+        <h1 className="text-2xl font-bold text-gray-900">Tableau de bord</h1>
+        <p className="mt-1 text-sm text-gray-500">
+          Vue d'ensemble de votre activité ChronosRH
         </p>
       </div>
 
       {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          title="Total des demandes"
-          value={stats.total}
-          icon={Clock}
-          color="primary"
-          trend="+12% ce mois"
-        />
-        <StatCard
-          title="En attente"
-          value={stats.pending}
-          icon={AlertCircle}
-          color="warning"
-        />
-        <StatCard
-          title="Approuvées"
-          value={stats.approved}
-          icon={CheckCircle}
-          color="success"
-        />
-        <StatCard
-          title="Mes demandes"
-          value={stats.myRequests}
-          icon={Users}
-          color="secondary"
-        />
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map((stat) => (
+          <div key={stat.name} className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className={`p-3 rounded-md ${stat.color}`}>
+                    <stat.icon className="h-6 w-6 text-white" />
+                  </div>
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">
+                      {stat.name}
+                    </dt>
+                    <dd className="text-lg font-medium text-gray-900">
+                      {stat.loading ? <LoadingSpinner size="sm" /> : stat.value}
+                    </dd>
+                  </dl>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Contenu principal */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Demandes récentes */}
-        <Card title="Demandes récentes" className="h-fit">
-          <div className="space-y-3">
-            {requests.slice(0, 5).map((request) => (
-              <RecentRequest key={request.id} request={request} />
-            ))}
-            {requests.length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                <Clock className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                <p>Aucune demande pour le moment</p>
+        {/* Mes dernières demandes */}
+        <div className="bg-white shadow rounded-lg">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-medium text-gray-900 flex items-center">
+                <DocumentTextIcon className="h-5 w-5 text-gray-400 mr-2" />
+                Mes dernières demandes
+              </h2>
+              <span className="text-sm text-gray-500">
+                {myRequests?.length || 0} au total
+              </span>
+            </div>
+          </div>
+          <div className="p-6">
+            {loadingMyRequests ? (
+              <div className="flex justify-center py-4">
+                <LoadingSpinner />
+              </div>
+            ) : recentRequests.length > 0 ? (
+              <div className="space-y-4">
+                {recentRequests.map((request) => (
+                  <div key={request.requestID} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">
+                        Demande du {new Date(request.requestDate).toLocaleDateString('fr-FR')}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {request.startAt} - {request.endAt}
+                      </p>
+                      {request.comment && (
+                        <p className="text-xs text-gray-400 mt-1 truncate">
+                          {request.comment}
+                        </p>
+                      )}
+                    </div>
+                    <StatusBadge status={request.status} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400" />
+                <p className="mt-2 text-gray-500">Aucune demande trouvée</p>
               </div>
             )}
           </div>
-        </Card>
+        </div>
 
-        {/* Actions rapides */}
-        <Card title="Actions rapides">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <button className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary-300 hover:bg-primary-50 transition-colors">
-              <Calendar className="w-8 h-8 text-primary-600 mx-auto mb-2" />
-              <p className="font-medium text-gray-900">Nouvelle demande</p>
-              <p className="text-sm text-gray-600">Créer une demande d'heures sup</p>
-            </button>
-            
-            <button className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary-300 hover:bg-primary-50 transition-colors">
-              <TrendingUp className="w-8 h-8 text-primary-600 mx-auto mb-2" />
-              <p className="font-medium text-gray-900">Mes statistiques</p>
-              <p className="text-sm text-gray-600">Voir mes heures du mois</p>
-            </button>
+        {/* Demandes urgentes */}
+        <div className="bg-white shadow rounded-lg">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-medium text-gray-900 flex items-center">
+                <ExclamationTriangleIcon className="h-5 w-5 text-yellow-500 mr-2" />
+                Demandes urgentes
+              </h2>
+              <span className="text-sm text-gray-500">
+                {pendingRequests?.length || 0} en attente
+              </span>
+            </div>
           </div>
-        </Card>
+          <div className="p-6">
+            {loadingPending ? (
+              <div className="flex justify-center py-4">
+                <LoadingSpinner />
+              </div>
+            ) : urgentRequests.length > 0 ? (
+              <div className="space-y-4">
+                {urgentRequests.map((request) => (
+                  <div key={request.requestID} className="flex items-center justify-between p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">
+                        Demande du {new Date(request.requestDate).toLocaleDateString('fr-FR')}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Employé ID: {request.employeeID}
+                      </p>
+                      <p className="text-xs text-yellow-600 mt-1">
+                        En attente de validation
+                      </p>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors">
+                        Approuver
+                      </button>
+                      <button className="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors">
+                        Rejeter
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <CheckCircleIcon className="mx-auto h-12 w-12 text-green-400" />
+                <p className="mt-2 text-gray-500">Aucune demande urgente</p>
+                <p className="text-xs text-gray-400">Toutes les demandes sont à jour</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Résumé rapide */}
+      <div className="bg-white shadow rounded-lg">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-medium text-gray-900">Résumé de la semaine</h2>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">
+                {myRequests?.filter(r => r.status === 'accepted').length || 0}
+              </div>
+              <div className="text-sm text-gray-500">Demandes approuvées</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-yellow-600">
+                {myRequests?.filter(r => r.status === 'pending').length || 0}
+              </div>
+              <div className="text-sm text-gray-500">En attente</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-red-600">
+                {myRequests?.filter(r => r.status === 'rejected').length || 0}
+              </div>
+              <div className="text-sm text-gray-500">Rejetées</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
