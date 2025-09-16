@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { clsx } from 'clsx';
-import { ChevronUp, ChevronDown, Search } from 'lucide-react';
+import { ChevronUp, ChevronDown, Search, Filter } from 'lucide-react';
 import Button from './Button';
 import LoadingSpinner from './LoadingSpinner';
 
@@ -14,6 +14,8 @@ const DataTable = ({
   pageSize = 10,
   className = '',
   emptyMessage = 'Aucune donnée disponible',
+  emptyIcon: EmptyIcon,
+  onRowClick,
   ...props
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -72,26 +74,34 @@ const DataTable = ({
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow border border-gray-200 p-8">
-        <LoadingSpinner size="lg" text="Chargement des données..." />
+      <div className="table-container">
+        <div className="p-8">
+          <LoadingSpinner size="lg" text="Chargement des données..." />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className={clsx('bg-white rounded-lg shadow border border-gray-200', className)} {...props}>
-      {/* Barre de recherche */}
+    <div className={clsx('table-container', className)} {...props}>
+      {/* Barre de recherche et filtres */}
       {searchable && (
-        <div className="p-4 border-b border-gray-200">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Rechercher..."
-              className="input pl-10"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+        <div className="p-4 border-b border-gray-200 bg-gray-50">
+          <div className="flex items-center space-x-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Rechercher..."
+                className="input pl-10 bg-white"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <Button variant="ghost" size="sm">
+              <Filter className="w-4 h-4 mr-2" />
+              Filtres
+            </Button>
           </div>
         </div>
       )}
@@ -105,8 +115,8 @@ const DataTable = ({
                 <th
                   key={column.key}
                   className={clsx(
-                    'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider',
-                    sortable && column.sortable !== false && 'cursor-pointer hover:bg-gray-100'
+                    'table-header',
+                    sortable && column.sortable !== false && 'cursor-pointer hover:bg-gray-100 transition-colors'
                   )}
                   onClick={() => column.sortable !== false && handleSort(column.accessor)}
                 >
@@ -120,9 +130,16 @@ const DataTable = ({
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {paginatedData.map((item, index) => (
-              <tr key={item.id || index} className="hover:bg-gray-50">
+              <tr 
+                key={item.id || index} 
+                className={clsx(
+                  'table-row',
+                  onRowClick && 'cursor-pointer'
+                )}
+                onClick={() => onRowClick && onRowClick(item)}
+              >
                 {columns.map((column) => (
-                  <td key={column.key} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td key={column.key} className="table-cell">
                     {column.render 
                       ? column.render(item[column.accessor], item, index)
                       : item[column.accessor]
@@ -136,17 +153,21 @@ const DataTable = ({
 
         {/* Message vide */}
         {paginatedData.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-500">{emptyMessage}</p>
+          <div className="empty-state">
+            {EmptyIcon && <EmptyIcon className="empty-state-icon" />}
+            <h3 className="empty-state-title">Aucune donnée</h3>
+            <p className="empty-state-description">{emptyMessage}</p>
           </div>
         )}
       </div>
 
       {/* Pagination */}
       {pagination && totalPages > 1 && (
-        <div className="px-6 py-3 border-t border-gray-200 flex items-center justify-between">
+        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50">
           <div className="text-sm text-gray-700">
-            Affichage de {startIndex + 1} à {Math.min(startIndex + pageSize, sortedData.length)} sur {sortedData.length} résultats
+            Affichage de <span className="font-medium">{startIndex + 1}</span> à{' '}
+            <span className="font-medium">{Math.min(startIndex + pageSize, sortedData.length)}</span> sur{' '}
+            <span className="font-medium">{sortedData.length}</span> résultats
           </div>
           <div className="flex items-center space-x-2">
             <Button
@@ -157,9 +178,22 @@ const DataTable = ({
             >
               Précédent
             </Button>
-            <span className="text-sm text-gray-700">
-              Page {currentPage} sur {totalPages}
-            </span>
+            <div className="flex items-center space-x-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const page = i + 1;
+                return (
+                  <Button
+                    key={page}
+                    variant={currentPage === page ? 'primary' : 'ghost'}
+                    size="sm"
+                    onClick={() => setCurrentPage(page)}
+                    className="w-8 h-8 p-0"
+                  >
+                    {page}
+                  </Button>
+                );
+              })}
+            </div>
             <Button
               variant="secondary"
               size="sm"

@@ -5,7 +5,8 @@ const LoadingSpinner = ({
   size = 'md', 
   color = 'primary',
   className = '',
-  text = null 
+  text = null,
+  overlay = false
 }) => {
   const sizeClasses = {
     sm: 'w-4 h-4',
@@ -15,15 +16,15 @@ const LoadingSpinner = ({
   };
 
   const colorClasses = {
-    primary: 'border-primary-600',
-    secondary: 'border-secondary-600',
-    success: 'border-success-600',
-    warning: 'border-warning-600',
-    danger: 'border-danger-600',
+    primary: 'border-blue-600',
+    secondary: 'border-gray-600',
+    success: 'border-green-600',
+    warning: 'border-yellow-600',
+    danger: 'border-red-600',
     white: 'border-white',
   };
 
-  return (
+  const spinner = (
     <div className={clsx('flex flex-col items-center justify-center', className)}>
       <div
         className={clsx(
@@ -33,10 +34,20 @@ const LoadingSpinner = ({
         )}
       />
       {text && (
-        <p className="mt-2 text-sm text-gray-600">{text}</p>
+        <p className="mt-3 text-sm text-gray-600 animate-pulse">{text}</p>
       )}
     </div>
   );
+
+  if (overlay) {
+    return (
+      <div className="fixed inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50 animate-fade-in">
+        {spinner}
+      </div>
+    );
+  }
+
+  return spinner;
 };
 
 export default LoadingSpinner;
